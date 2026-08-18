@@ -1,0 +1,101 @@
+/* Light-only by design — no dark-mode block, matching the workspace's lessons. */
+:root {
+  color-scheme: light;
+  --bg: #fffdf6;
+  --ink: #22242a;
+  --muted: #6d7178;
+  --faint: #9aa0a8;
+  --accent: #0f62b7;
+  --accent-ink: #0a4d92;
+  --card: #faf7ee;
+  --border: #e5e0d2;
+  --serif: "Charter", "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+  --s-1: .4rem; --s-2: .75rem; --s-3: 1.1rem; --s-4: 1.6rem; --s-5: 2.4rem; --s-6: 3.4rem;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--serif); font-size: 1.05rem; line-height: 1.55;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.topbar {
+  position: sticky; top: 0; z-index: 5;
+  background: rgba(255, 253, 246, .95); border-bottom: 1px solid var(--border);
+  padding: var(--s-2) var(--s-3);
+  display: flex; gap: var(--s-3); align-items: baseline; flex-wrap: wrap;
+}
+.topbar .home { font-weight: bold; white-space: nowrap; }
+.topbar .here { color: var(--muted); min-width: 0; }
+.topbar .lock-link { margin-left: auto; font-size: .85rem; color: var(--faint); }
+main { max-width: 50rem; margin: 0 auto; padding: var(--s-4) var(--s-3) var(--s-6); }
+header.doc h1 { font-size: 1.7rem; line-height: 1.2; margin: 0 0 var(--s-1); }
+header.doc .meta { color: var(--muted); margin: 0 0 var(--s-3); }
+.kicker {
+  color: var(--faint); text-transform: uppercase; letter-spacing: .08em;
+  font-size: .8rem; margin: var(--s-5) 0 var(--s-2);
+}
+.toc { background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: var(--s-2) var(--s-3); margin: 0 0 var(--s-4); }
+.toc p { margin: 0 0 var(--s-1); color: var(--muted); font-size: .9rem; }
+.toc ul { margin: 0; padding-left: 1.2rem; }
+.cards { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.cards > * { min-width: 0; }
+.cards a {
+  display: block; background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: var(--s-2) var(--s-3); color: inherit;
+}
+.cards a:hover { border-color: var(--accent); text-decoration: none; }
+.cards .t { color: var(--accent-ink); font-weight: bold; }
+.cards .d { margin: .15rem 0 0; font-size: .93rem; color: var(--muted); }
+.cards .n { font-size: .8rem; color: var(--faint); }
+figure.page { margin: 0 0 var(--s-4); }
+figure.page figcaption {
+  color: var(--faint); font-size: .8rem; text-transform: uppercase;
+  letter-spacing: .08em; margin-bottom: var(--s-1);
+}
+figure.page img {
+  display: block; width: 100%; height: auto; background: #fff;
+  border: 1px solid var(--border); border-radius: 4px;
+}
+figure.page img.pending { min-height: 55vh; }
+button.load-all {
+  font: inherit; font-size: .9rem; color: var(--accent-ink);
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: var(--s-1) var(--s-2); margin: 0 0 var(--s-3); cursor: pointer;
+}
+nav.pager {
+  display: flex; justify-content: space-between; gap: var(--s-3);
+  border-top: 1px solid var(--border); padding-top: var(--s-3); margin-top: var(--s-5);
+}
+nav.pager span { min-width: 0; }
+footer.site { color: var(--faint); font-size: .85rem; margin-top: var(--s-5); }
+/* ---- gate ---- */
+body.locked main, body.locked nav.pager { display: none; }
+#gate { display: none; }
+body.locked #gate {
+  display: flex; position: fixed; inset: 0; z-index: 10;
+  background: var(--bg); align-items: center; justify-content: center;
+  padding: var(--s-3);
+}
+#gate form {
+  width: 100%; max-width: 22rem; background: var(--card);
+  border: 1px solid var(--border); border-radius: 12px; padding: var(--s-4);
+}
+#gate h2 { margin: 0 0 var(--s-1); font-size: 1.2rem; }
+#gate p.hint { margin: 0 0 var(--s-3); color: var(--muted); font-size: .9rem; }
+#gate input {
+  display: block; width: 100%; font: inherit; color: inherit;
+  background: #fff; border: 1px solid var(--border); border-radius: 8px;
+  padding: var(--s-1) var(--s-2); margin: 0 0 var(--s-2);
+}
+#gate button {
+  font: inherit; width: 100%; background: var(--accent); color: #fff;
+  border: none; border-radius: 8px; padding: var(--s-1) var(--s-2); cursor: pointer;
+}
+#gate #gate-err { color: #a4262c; font-size: .9rem; margin: var(--s-2) 0 0; }
+@media print {
+  .topbar, nav.pager, button.load-all { display: none; }
+  figure.page img { border: none; }
+}
