@@ -29,7 +29,43 @@ SITE_SUB = "Private clinical reference"
 STUDY = [
     ("aki", "lessons/0001-aki-recognition-and-response.html",
      "AKI: spot it, stage it, bundle it",
-     "The guideline rebuilt as a taught chapter — risk, KDIGO staging, the response bundle, referral triggers, plus a self-check quiz."),
+     "Risk, KDIGO staging, the response bundle, referral triggers — with a self-check quiz."),
+    ("hyperkalaemia", "lessons/0002-hyperkalaemia-protect-shift-remove.html",
+     "Hyperkalaemia: protect, shift, remove",
+     "ECG changes, calcium, insulin–glucose + salbutamol, SZC, and the sample traps."),
+    ("contrast-aki", "lessons/0003-contrast-aki-prevent-and-proceed.html",
+     "Contrast-AKI: prevent, but never delay the scan",
+     "Risk bands by eGFR, hydration regimens, metformin rules, the acutely unwell pathway."),
+    ("hus", "lessons/0004-atypical-hus-the-pathway.html",
+     "Atypical HUS: eight steps to eculizumab",
+     "MAHA → TTP protocol → ADAMTS13 → Newcastle → the vaccine + antibiotic package."),
+    ("ckd", "lessons/0005-ckd-slow-the-slope.html",
+     "CKD: slow the slope",
+     "Definition, KFRE, the monitoring grid, the drug stack, referral triggers."),
+    ("hyperphosphataemia", "lessons/0006-hyperphosphataemia-binder-ladder.html",
+     "Hyperphosphataemia: the binder ladder",
+     "Diet first, the calcium fork, both binder ladders, monitoring intervals."),
+    ("iga-nephropathy", "lessons/0007-iga-nephropathy-supportive-first.html",
+     "IgA nephropathy: supportive first, then the MDT menu",
+     "BP 120/80 + ACEi/ARB + SGLT2i, sparsentan, Kinpeygo, steroids, MMF."),
+    ("anca-vasculitis", "lessons/0008-anca-vasculitis-induction-to-maintenance.html",
+     "ANCA vasculitis: three doors into induction",
+     "The induction triage, the supportive bundle, cyclophosphamide safety, maintenance."),
+    ("hd-anticoagulation", "lessons/0009-hd-anticoagulation-circuit-choices.html",
+     "HD circuit anticoagulation: enoxaparin by default",
+     "Algorithm 1, heparin-free rules, UFH tables, HIT and argatroban."),
+    ("vascular-access", "lessons/0010-vascular-access-lines-and-lifelines.html",
+     "Vascular access: bleeding, blockage, thrombosis",
+     "The bleeding triad, the urokinase escalation, the acute thrombosis pathway."),
+    ("anticoagulants", "lessons/0011-vte-anticoagulation-choices.html",
+     "VTE anticoagulation: the clock, the choice, the cancer caveat",
+     "The 1 h / 4 h deadlines, DOAC selection with renal gates, cancer VTE."),
+    ("analgesics", "lessons/0012-analgesia-in-advanced-ckd.html",
+     "Analgesia in advanced CKD: the renal ladder",
+     "Paracetamol → tramadol → oxycodone/patches; NSAID rules; adjuvants."),
+    ("transplant", "lessons/0013-transplant-protocols-the-map.html",
+     "Kidney transplant protocols: the map",
+     "Twelve protocols on one map: listing, desensitisation, the drugs, the complications."),
 ]
 
 # group → [(slug, title, blurb, sections)]
@@ -277,6 +313,9 @@ def study_fragment(lesson_file: str) -> str:
     # workspace transcript → the viewer (transcripts aren't published)
     frag = re.sub(r"\.\./reference/([a-z0-9-]+)-transcript\.html", r"../g/\1.html", frag)
     frag = frag.replace("../index.html", "../")
+    # sibling lesson links → sibling study pages
+    for other_slug, other_file, _, _ in STUDY:
+        frag = frag.replace(f'href="{Path(other_file).name}"', f'href="{other_slug}.html"')
     # agent-session framing doesn't apply on the public site
     frag = re.sub(r'<p class="sources">Stuck or curious\?.*?</p>', "", frag, flags=re.S)
     # the study shell already renders the title — drop the lesson's own kicker + h1
