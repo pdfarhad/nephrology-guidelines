@@ -46,6 +46,23 @@ function setLocked(locked) {
   if (lockLink) lockLink.hidden = locked;
 }
 
+// ---- study chapters (encrypted HTML fragments) ----
+async function startStudy() {
+  const target = document.getElementById("study-body");
+  const src = document.body.dataset.study;
+  if (!target || !src || !aesKey || target.dataset.done) return;
+  target.dataset.done = "1";
+  try {
+    const buf = await (await fetch(src)).arrayBuffer();
+    const pt = await decryptWith(aesKey, new Uint8Array(buf));
+    target.innerHTML = new TextDecoder().decode(pt);
+    if (window.initQuizLite) window.initQuizLite(target);
+    startImages();
+  } catch {
+    delete target.dataset.done;
+  }
+}
+
 async function unlockWith(user, pass) {
   const key = await deriveKey(user, pass);
   if (!(await verify(key))) return false;
@@ -56,6 +73,7 @@ async function unlockWith(user, pass) {
   } catch { /* private browsing — session only */ }
   setLocked(false);
   startImages();
+  startStudy();
   return true;
 }
 window.renalUnlock = unlockWith; // used by the form and by tests
@@ -122,6 +140,7 @@ async function init() {
         aesKey = key;
         setLocked(false);
         startImages();
+        startStudy();
         return;
       }
     } catch { /* fall through to gate */ }

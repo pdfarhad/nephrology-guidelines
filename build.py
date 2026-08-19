@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Build the encrypted static reader site for GitHub Pages into deploy/static/.
 
-The page images are AES-256-GCM encrypted (see encrypt.mjs); the browser asks for
-the username/password and decrypts client-side. The plain JPEGs are never published.
+Page images AND study chapters are AES-256-GCM encrypted (see encrypt.mjs); the browser
+asks for the username/password and decrypts client-side. Plain content is never published.
+Page-image blobs are reused between builds (stable salt), so rebuilds diff small.
 
 Usage (credentials are NOT stored in this repo):
     SITE_USER=... SITE_PASS=... python3 deploy/build.py
 """
 import html
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -21,6 +23,14 @@ STATIC = DEPLOY / "static"
 
 SITE_TITLE = "Renal Unit Guidelines"
 SITE_SUB = "Private clinical reference"
+
+# Study chapters: rebuilt lessons published as encrypted fragments.
+# (slug, workspace lesson file, title, blurb)
+STUDY = [
+    ("aki", "lessons/0001-aki-recognition-and-response.html",
+     "AKI: spot it, stage it, bundle it",
+     "The guideline rebuilt as a taught chapter — risk, KDIGO staging, the response bundle, referral triggers, plus a self-check quiz."),
+]
 
 # group → [(slug, title, blurb, sections)]
 # sections: [(capture page number, label)] — rendered as a jump-to list.
@@ -148,6 +158,36 @@ nav.pager {
 }
 nav.pager span { min-width: 0; }
 footer.site { color: var(--faint); font-size: .85rem; margin-top: var(--s-5); }
+/* ---- study chapter content ---- */
+#study-body h1 { font-size: 1.7rem; line-height: 1.2; margin: 0 0 var(--s-1); }
+#study-body h2 { font-size: 1.35rem; margin: var(--s-5) 0 var(--s-2); }
+#study-body h3 { font-size: 1.1rem; margin: var(--s-4) 0 var(--s-2); }
+#study-body .kicker { margin-top: 0; }
+h2 .no { color: var(--faint); font-weight: normal; margin-right: .3rem; }
+.lede { font-size: 1.08rem; color: var(--muted); margin: 0 0 var(--s-4); }
+table { border-collapse: collapse; width: 100%; margin: 0 0 var(--s-4); font-size: .93em; display: block; overflow-x: auto; }
+th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-size: .78em; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); white-space: nowrap; }
+.callout { background: #eef4fc; border: 1px solid #b9d2ee; border-radius: 10px; padding: var(--s-2) var(--s-3); margin: 0 0 var(--s-4); }
+.callout .title { color: var(--faint); text-transform: uppercase; letter-spacing: .07em; font-size: .78rem; margin: 0 0 var(--s-1); }
+.callout.warn { background: #fdf3dd; border-color: #e4c37a; }
+.callout.win { background: #ecf7f1; border-color: #a9d8c2; }
+.callout > :last-child { margin-bottom: 0; }
+sup a { font-size: .75em; }
+.sources { font-size: .86em; color: var(--muted); line-height: 1.6; }
+.next { display: flex; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; border-top: 1px solid var(--border); margin-top: var(--s-5); padding-top: var(--s-3); }
+.next span { min-width: 0; }
+/* ---- quiz-lite ---- */
+.quiz .q { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: var(--s-2) var(--s-3); margin: 0 0 var(--s-3); }
+.quiz .prompt { font-weight: bold; margin: 0 0 var(--s-2); }
+.quiz .choices { margin: 0; padding-left: 1.4rem; }
+.quiz .choices li { cursor: pointer; padding: .25rem .4rem; border-radius: 6px; margin-bottom: .3rem; }
+.quiz .choices li:hover { background: #f1ede0; }
+.quiz .choices li.correct { background: #ecf7f1; outline: 1px solid #a9d8c2; }
+.quiz .choices li.wrong { background: #fdecec; outline: 1px solid #e4a1a1; }
+.quiz .answer { display: none; margin: var(--s-2) 0 0; }
+.quiz .answer.open { display: block; }
+.quiz .reveal { font: inherit; font-size: .88rem; color: var(--accent-ink); background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: .25rem .6rem; cursor: pointer; }
 /* ---- gate ---- */
 body.locked main, body.locked nav.pager { display: none; }
 #gate { display: none; }
@@ -200,7 +240,8 @@ def page_files(slug: str):
     return sorted(p.name for p in d.glob("page-*.jpg"))
 
 
-def shell(title: str, body: str, root: str, here: str = "") -> str:
+def shell(title: str, body: str, root: str, here: str = "", extra_scripts: str = "",
+          body_attrs: str = "") -> str:
     crumb = f'<span class="here">{esc(here)}</span>' if here else ""
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -212,16 +253,36 @@ def shell(title: str, body: str, root: str, here: str = "") -> str:
 <link rel="stylesheet" href="{root}/assets/site.css">
 <link rel="icon" href="data:,">
 </head>
-<body class="locked">
+<body class="locked"{body_attrs}>
 <div class="topbar"><a class="home" href="{root}/">{esc(SITE_TITLE)}</a>{crumb}<a class="lock-link" href="#" hidden>Lock</a></div>
 {GATE}
 <main>
 {body}
 </main>
-<script src="{root}/assets/app.js" data-root="{root}" defer></script>
+{extra_scripts}<script src="{root}/assets/app.js" data-root="{root}" defer></script>
 </body>
 </html>
 """
+
+
+def study_fragment(lesson_file: str) -> str:
+    """Extract a workspace lesson's <main> and adapt it for the static site."""
+    text = (WORKSPACE / lesson_file).read_text()
+    m = re.search(r"<main>(.*)</main>", text, re.S)
+    if not m:
+        sys.exit(f"no <main> in {lesson_file}")
+    frag = m.group(1)
+    # source captures → the encrypted viewer, anchored to the page
+    frag = re.sub(r"\.\./library/pages/([a-z0-9-]+)/page-(\d+)\.jpg", r"../g/\1.html#p-\2", frag)
+    # workspace transcript → the viewer (transcripts aren't published)
+    frag = re.sub(r"\.\./reference/([a-z0-9-]+)-transcript\.html", r"../g/\1.html", frag)
+    frag = frag.replace("../index.html", "../")
+    # agent-session framing doesn't apply on the public site
+    frag = re.sub(r'<p class="sources">Stuck or curious\?.*?</p>', "", frag, flags=re.S)
+    # the study shell already renders the title — drop the lesson's own kicker + h1
+    frag = re.sub(r'<p class="kicker">.*?</p>\s*', "", frag, count=1, flags=re.S)
+    frag = re.sub(r"<h1>.*?</h1>\s*", "", frag, count=1, flags=re.S)
+    return frag
 
 
 def build():
@@ -230,27 +291,44 @@ def build():
     if not user or not password:
         sys.exit("set SITE_USER and SITE_PASS env vars (credentials are not stored in the repo)")
 
-    if STATIC.exists():
-        shutil.rmtree(STATIC)
+    # Selective clean: keep pages-enc/ and manifest.json so encrypt.mjs can reuse the
+    # salt and skip re-encrypting 39 MB of unchanged page images.
+    for sub in ("g", "s", "study-enc"):
+        shutil.rmtree(STATIC / sub, ignore_errors=True)
     (STATIC / "g").mkdir(parents=True)
-    (STATIC / "assets").mkdir()
+    (STATIC / "s").mkdir()
+    (STATIC / "assets").mkdir(exist_ok=True)
     (STATIC / "assets" / "site.css").write_text(CSS)
     shutil.copy(DEPLOY / "app.js.template", STATIC / "assets" / "app.js")
+    shutil.copy(DEPLOY / "quiz-lite.js", STATIC / "assets" / "quiz-lite.js")
     (STATIC / "robots.txt").write_text("User-agent: *\nDisallow: /\n")
     (STATIC / ".nojekyll").write_text("")
 
-    # Encrypt all page images with a key derived from user:pass.
+    # Stage study fragments, then encrypt pages + fragments in one pass.
+    study_src = DEPLOY / "_study_build"
+    shutil.rmtree(study_src, ignore_errors=True)
+    study_src.mkdir()
+    for slug, lesson_file, _, _ in STUDY:
+        (study_src / f"{slug}.html").write_text(study_fragment(lesson_file))
     subprocess.run(
         ["node", str(DEPLOY / "encrypt.mjs"), str(PAGES_SRC),
-         str(STATIC / "pages-enc"), str(STATIC / "assets" / "manifest.json")],
+         str(STATIC / "pages-enc"), str(STATIC / "assets" / "manifest.json"),
+         str(study_src), str(STATIC / "study-enc")],
         env={**os.environ, "SITE_PASSPHRASE": f"{user}:{password}"},
         check=True,
     )
+    shutil.rmtree(study_src)
 
     flat = [(slug, title) for _, items in MANIFEST for slug, title, _, _ in items]
 
     # Index page.
-    groups_html = []
+    study_cards = "".join(
+        f'<li><a href="s/{slug}.html"><span class="t">{esc(title)}</span>'
+        f' <span class="n">· study chapter</span>'
+        f'<p class="d">{esc(blurb)}</p></a></li>'
+        for slug, _, title, blurb in STUDY
+    )
+    groups_html = [f'<h2 class="kicker">Study chapters</h2>\n<ul class="cards">\n{study_cards}\n</ul>']
     for group, items in MANIFEST:
         cards = []
         for slug, title, blurb, _ in items:
@@ -273,6 +351,20 @@ def build():
         'Not for redistribution.</footer>'
     )
     (STATIC / "index.html").write_text(shell(SITE_TITLE, index_body, root="."))
+
+    # Study shell pages.
+    for slug, _, title, blurb in STUDY:
+        body = (
+            f'<header class="doc"><h1>{esc(title)}</h1>'
+            f'<p class="meta">Study chapter · source: <a href="../g/{slug}.html">guideline pages</a></p></header>\n'
+            '<div id="study-body"></div>'
+        )
+        page = shell(
+            title, body, root="..", here=title,
+            extra_scripts='<script src="../assets/quiz-lite.js" defer></script>\n',
+            body_attrs=f' data-study="../study-enc/{slug}.bin"',
+        )
+        (STATIC / "s" / f"{slug}.html").write_text(page)
 
     # Viewer pages.
     for group, items in MANIFEST:
@@ -307,10 +399,13 @@ def build():
                 s, t = flat[k + 1]
                 next_a = f'<span><a href="{s}.html">{esc(t)} →</a></span>'
 
+            study_link = ""
+            if any(s == slug for s, _, _, _ in STUDY):
+                study_link = f' · <a href="../s/{slug}.html">study chapter</a>'
             n_label = "1 page" if len(files) == 1 else f"{len(files)} pages"
             body = (
                 f'<header class="doc"><h1>{esc(title)}</h1>'
-                f'<p class="meta">{esc(group)} · {n_label} · {esc(blurb)}</p></header>\n'
+                f'<p class="meta">{esc(group)} · {n_label} · {esc(blurb)}{study_link}</p></header>\n'
                 f"{toc}"
                 '<button class="load-all" hidden>Load all pages (for printing)</button>\n'
                 + "\n".join(figures)
@@ -319,7 +414,7 @@ def build():
             (STATIC / "g" / f"{slug}.html").write_text(shell(title, body, root="..", here=title))
 
     n_pages = sum(len(page_files(s)) for s, _ in flat)
-    print(f"built {len(flat)} guideline pages, {n_pages} encrypted page images")
+    print(f"built {len(flat)} guideline pages, {len(STUDY)} study chapters, {n_pages} page images")
 
 
 if __name__ == "__main__":
